@@ -1,8 +1,9 @@
-import subprocess, sys
+import subprocess
+import sys
 from contextlib import redirect_stdout
 import json
 from model import Computer
-from pydantic import BaseModel
+import pydantic
 import json
 
 
@@ -12,91 +13,98 @@ class MyClass:
         self.IP = IP
         self.License = License
 
-LicenseKey = [
-#для КриптоПро CSP 3.6: 
-'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\Products\\05480A45343B0B0429E4860F13549069\\InstallProperties',
-#для КриптоПро CSP 3.9:
-'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\68A52D936E5ACF24C9F8FE4A1C830BC8\\InstallProperties',
-#для КриптоПро CSP 4.0:
-'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\7AB5E7046046FB044ACD63458B5F481C\\InstallProperties',
-#для КриптоПро CSP 5.0:
-'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\08F19F05793DC7340B8C2621D83E5BE5\\InstallProperties'
+
+LicenseKeyPath =[
+    # для КриптоПро CSP 4.0:
+    'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\7AB5E7046046FB044ACD63458B5F481C\\InstallProperties',
+    # для КриптоПро CSP 5.0:
+    'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\08F19F05793DC7340B8C2621D83E5BE5\\InstallProperties'
 ]
 
 
+def get_key(computerName):
+    setup_script = 'pwScript\CheckLicense.ps1'
+    for path in LicenseKeyPath:
+        key = subprocess.check_output([
+        "powershell.exe",
+        "-File",
+        setup_script,
+        computerName, path
+        ],
+        )
+        try:
+            ComputerLst = key.decode('utf-8')
+            return ComputerLst
+        except Exception:
+            continue
+    return False
 
-def getData():
-  setup_script = 'pwScript\CheckLicense.ps1'
-  path = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products\\08F19F05793DC7340B8C2621D83E5BE5\\InstallProperties\\'
-  key = 'ProductID'
-  computerName = "DESKTOP-NIAPJ6Q"
-  p = subprocess.check_output([
-              "powershell.exe", 
-              "-File", 
-              setup_script,
-              computerName, path   
-            ],
-  )
-  try:
-    data = p.decode('utf-8')
-    return data
-  except Exception:
-      return False
-  
-  
-# def SearchPc():
+
+# def search_pc():
 #     ADName = ['DESKOT-FEF31', 'DESKOT-ARSF31', 'DESKOT-GJEF31','DESKOT-HDFHEF31','DESKOT-BFGEF31','DESKOT-AWF31']
 #     Computers = []
 #     for name in ADName:
 #         instance = Computer(name, '', '')
 #         Computers.append(instance)
-    
+
 #     for instance in Computers:
 #         print(instance.name)
-    
-      
-  #lines_list = data.splitlines()
-  #lines_list = list(filter(lambda x: x != "", lines_list))
-  #print(p.decode('utf-8'))
+
+    # lines_list = ComputerLst.splitlines()
+    # lines_list = list(filter(lambda x: x != "", lines_list))
+    # print(ComputerObj.decode('utf-8'))
 # Создание экземпляров классов
 
-def SearchPc():
+def search_pc():
     setup_script = 'pwScript\SearchPC.ps1'
-    p = subprocess.check_output([
-            "powershell.exe", 
-            "-File", 
-            setup_script,
-          ],
-)
-
-    data = json.loads(p)
-    return data
-    # lines_list = data.splitlines()
+    ComputerObj = subprocess.check_output([
+        "powershell.exe",
+        "-File",
+        setup_script,
+    ],
+    )
+    try:
+        ComputerLst = json.loads(ComputerObj)
+        return ComputerLst
+    except Exception:
+        return False
+    # lines_list = ComputerLst.splitlines()
     # lines_list = list(filter(lambda x: x != "", lines_list))
-    
+
     # Computers = []
     # for name in lines_list:
     #     instance = Computer(name, '', '')
     #     Computers.append(instance)
-    # return Computers    
+    # return Computers
+
+
+def create_obj(ComputerLst):
+    pcs = []
+    i = 0
+    for pc in ComputerLst:
+        my_obj = MyClass(
+            ComputerLst[i]["Name"], ComputerLst[i]['IPv4Address'], ComputerLst[i]['License'])
+        pcs.append(my_obj)
+        i += 1
+    return pcs
+
+def checked_all_pc(ComputerObj):
+    for pc in ComputerObj:
+        key =get_key(pc.Name)
+        print(pc.Name)
+        pc.License = key
+    return ComputerObj
 
 
 if __name__ == '__main__':
-    k =getData()
-    print(k)
-    data = SearchPc()
-    pcs = []
+    
+    ComputerLst = search_pc()
+    ComputerObj = create_obj(ComputerLst)
+
+    ComputerObj = checked_all_pc(ComputerObj)
     i = 0
-    for pc in data:
-        my_obj = MyClass(data[i]["Name"], data[i]['IPv4Address'], data[i]['License'])
-        pcs.append(my_obj)
-        i+=1
-        
-    for p in pcs:
-        print(p.Name)
-    per = json.dumps(pcs[0].__dict__)
-    print(per)
- 
-    
-    
-    
+    for per in ComputerObj:
+        per = json.dumps(ComputerObj[i].__dict__)
+        print(per)
+        i +=1
+   
